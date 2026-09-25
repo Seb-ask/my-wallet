@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<title>マイウォレット</title>
+<style>
+  :root{
+    --bg: #000000;
+    --panel: #1c1c1e;
+    --panel-2: #2c2c2e;
+    --hairline: rgba(255,255,255,0.12);
+    --text: #f5f5f7;
+    --text-dim: #9a9aa0;
+    --accent: #0a84ff;
+    --danger: #ff453a;
+    box-sizing: border-box;
+  }
+  *{ box-sizing: inherit; -webkit-tap-highlight-color: transparent; }
+  html, body{
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Hiragino Sans", "Helvetica Neue", sans-serif;
+    overscroll-behavior-y: none;
+    transition: background .2s, color .2s;
+  }
+  body.light{
+    --bg: #f2f2f7;
+    --panel: #ffffff;
+    --panel-2: #ececef;
+    --hairline: rgba(0,0,0,0.10);
+    --text: #1c1c1e;
+    --text-dim: #8e8e93;
+    --accent: #007aff;
+    --danger: #ff3b30;
+  }
+  body.light .card::after{
+    background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(0,0,0,0.04) 40%, rgba(0,0,0,0.14));
+  }
+  body.light .sheet-handle{ background: #c7c7cc; }
+  body{
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 8px 18px 4px;
+    flex-shrink: 0;
+  }
+  .topbar h1{
+    font-size: 34px; font-weight: 700; letter-spacing: -0.02em; margin: 0;
+  }
+  .icon-btn{
+    width: 34px; height: 34px; border-radius: 50%;
+    background: var(--panel-2);
+    border: none; color: var(--accent);
+    font-size: 20px; line-height: 1;
+    display:flex; align-items:center; justify-content:center;
+    cursor: pointer;
+  }
+  .icon-btn:active{ filter: brightness(1.3); }
+
+  /* ---------- Stack view ---------- */
+  main{
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 18px 40px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .stack{
+    position: relative;
+    max-width: 420px;
+    margin: 0 auto;
+  }
+  .card-slot{
+    position: relative;
+    height: 56px; /* peek height when stacked */
+  }
+  .card-slot:last-child{ height: 214px; }
+
+  .card{
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 214px;
+    border-radius: 16px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    color: #fff;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.45);
+    cursor: pointer;
+    transition: top .38s cubic-bezier(.32,.9,.4,1), box-shadow .38s;
+    background-size: cover;
+    background-position: center;
+  }
+  .card.expanded{ box-shadow: 0 18px 34px rgba(0,0,0,0.6); }
+  .card::after{
+    content:"";
+    position:absolute; inset:0;
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(0,0,0,0.06) 40%, rgba(0,0,0,0.18));
+    pointer-events: none;
+  }
+  .card .row-top{ display:flex; justify-content:space-between; align-items:flex-start; position:relative; z-index:1; }
+  .card .label{ font-size: 15px; font-weight: 600; opacity: .92; }
+  .card .network{ font-size: 12px; font-weight: 700; letter-spacing: .04em; opacity:.85; }
+  .card .row-bottom{ display:flex; justify-content:space-between; align-items:flex-end; position:relative; z-index:1; }
+  .card .number{ font-size: 15px; letter-spacing: .06em; font-variant-numeric: tabular-nums; opacity:.95; }
+  .card .holder{ font-size: 12px; opacity:.8; }
+
+  .empty{
+    text-align: center;
+    padding: 90px 30px 0;
+    color: var(--text-dim);
+  }
+  .empty p{ font-size: 15px; line-height: 1.6; margin: 10px 0 22px; }
+  .empty button{
+    background: var(--accent); color: #fff; border: none;
+    padding: 12px 22px; border-radius: 12px; font-size: 15px; font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* ---------- Detail panel below focused card ---------- */
+  .detail{
+    max-width: 420px; margin: 18px auto 0;
+    display: none;
+  }
+  .detail.show{ display: block; }
+  .detail .section-title{
+    font-size: 13px; color: var(--text-dim); margin: 18px 4px 8px;
+  }
+  .detail .section-title:first-child{ margin-top: 0; }
+  .detail .group{
+    background: var(--panel);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+  .detail .item{
+    display:flex; justify-content: space-between; align-items:center;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--hairline);
+    font-size: 15px;
+    cursor: default;
+  }
+  .detail .item:last-child{ border-bottom: none; }
+  .detail .item .k{ color: var(--text-dim); }
+  .detail .item .v{ color: var(--text); font-variant-numeric: tabular-nums; }
+  .detail .tx-item{ cursor: pointer; }
+  .detail .tx-item .v{ text-align: right; }
+  .detail .tx-item .amount{ display:block; }
+  .detail .tx-item .date{ display:block; font-size: 12px; color: var(--text-dim); }
+  .detail .empty-note{
+    font-size: 13px; color: var(--text-dim); padding: 14px 16px; text-align:center;
+  }
+  .detail .actions button{
+    width: 100%;
+    background: var(--panel);
+    border: none;
+    color: var(--accent);
+    font-size: 16px; font-weight: 500;
+    padding: 14px;
+    border-bottom: 1px solid var(--hairline);
+    cursor: pointer;
+  }
+  .detail .actions button:last-child{ border-bottom:none; }
+  .detail .actions button.danger{ color: var(--danger); }
+
+  /* ---------- Sheet (add / edit) ---------- */
+  .sheet-backdrop{
+    position: fixed; inset:0;
+    background: rgba(0,0,0,0.5);
+    opacity: 0; pointer-events: none;
+    transition: opacity .25s;
+    z-index: 500;
+  }
+  .sheet-backdrop.show{ opacity: 1; pointer-events: auto; }
+  .sheet{
+    position: fixed; left:0; right:0; bottom:0;
+    background: var(--panel);
+    border-radius: 20px 20px 0 0;
+    padding: 14px 18px calc(24px + env(safe-area-inset-bottom, 0px));
+    transform: translateY(100%);
+    transition: transform .32s cubic-bezier(.32,.9,.4,1);
+    max-height: 86vh;
+    overflow-y: auto;
+    z-index: 501;
+  }
+  .sheet.show{ transform: translateY(0); }
+  .sheet-handle{
+    width: 36px; height: 5px; background: #555; border-radius: 3px;
+    margin: 0 auto 14px;
+  }
+  .sheet h2{ font-size: 20px; margin: 0 0 16px; text-align:center; }
+  .field{ margin-bottom: 14px; }
+  .field label{ display:block; font-size: 13px; color: var(--text-dim); margin-bottom: 6px; }
+  .field input{
+    width: 100%;
+    background: var(--panel-2);
+    border: none;
+    border-radius: 10px;
+    padding: 11px 12px;
+    color: var(--text);
+    font-size: 16px;
+  }
+  .field input::placeholder{ color: #6d6d72; }
+  .row-2{ display:flex; gap: 12px; }
+  .row-2 .field{ flex: 1; }
+
+  .swatches{ display:flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+  .swatch{
+    width: 42px; height: 42px; border-radius: 10px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    background-size: cover; background-position: center;
+  }
+  .swatch.selected{ border-color: #fff; }
+  .swatch.photo{
+    display:flex; align-items:center; justify-content:center;
+    background: var(--panel-2); color: var(--text-dim); font-size: 18px;
+  }
+
+  .sheet-save{
+    width: 100%;
+    background: var(--accent);
+    color: #fff; border: none;
+    padding: 14px; border-radius: 12px;
+    font-size: 16px; font-weight: 600;
+    margin-top: 6px;
+    cursor: pointer;
+  }
+  .sheet-cancel{
+    width: 100%; background: transparent; border: none;
+    color: var(--accent); font-size: 16px; padding: 12px; margin-top: 2px;
+    cursor: pointer;
+  }
+  .sheet-delete{
+    width: 100%; background: transparent; border: none;
+    color: var(--danger); font-size: 16px; padding: 12px; margin-top: 2px;
+    cursor: pointer;
+  }
+
+  .note{
+    font-size: 12px; color: var(--text-dim); text-align:center; margin: 18px 0 0;
+    line-height: 1.6;
+  }
+
+  .theme-choices{ display:flex; gap: 10px; margin-top: 4px; }
+  .theme-btn{
+    flex: 1;
+    padding: 12px 10px;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    background: var(--panel-2);
+    color: var(--text);
+    font-size: 15px; font-weight: 500;
+    cursor: pointer;
+  }
+  .theme-btn.selected{ border-color: var(--accent); color: var(--accent); }
+</style>
+</head>
+<body>
+
+  <div class="topbar">
+    <h1>ウォレット</h1>
+    <div style="display:flex; gap:10px;">
+      <button class="icon-btn" id="addBtn" aria-label="カードを追加">＋</button>
+      <button class="icon-btn" id="menuBtn" aria-label="設定">⋯</button>
+    </div>
+  </div>
+
+  <main>
+    <div class="stack" id="stack"></div>
+    <div class="detail" id="detail"></div>
+    <div class="empty" id="emptyState" style="display:none;">
+      <div style="font-size:44px;">🗂️</div>
+      <p>カードがまだありません。<br>右上の＋から自分用のカードを追加できます。</p>
+      <button id="emptyAddBtn">カードを追加</button>
+    </div>
+  </main>
+
+  <div class="sheet-backdrop" id="backdrop"></div>
+
+  <div class="sheet" id="sheet">
+    <div class="sheet-handle"></div>
+    <h2 id="sheetTitle">新しいカード</h2>
+
+    <div class="field">
+      <label>カード名（例：メインカード）</label>
+      <input type="text" id="f_label" placeholder="カード名" maxlength="20">
+    </div>
+
+    <div class="row-2">
+      <div class="field">
+        <label>名義</label>
+        <input type="text" id="f_holder" placeholder="TARO YAMADA" maxlength="24" style="text-transform:uppercase;">
+      </div>
+      <div class="field">
+        <label>下4桁</label>
+        <input type="text" id="f_last4" placeholder="1234" maxlength="4" inputmode="numeric">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>有効期限（MM/YY）</label>
+      <input type="text" id="f_expiry" placeholder="12/29" maxlength="5">
+    </div>
+
+    <div class="field">
+      <label>デザイン</label>
+      <div class="swatches" id="swatches"></div>
+      <input type="file" id="photoInput" accept="image/*" style="display:none;">
+    </div>
+
+    <button class="sheet-save" id="saveBtn">保存</button>
+    <button class="sheet-cancel" id="cancelBtn">キャンセル</button>
+  </div>
+
+  <div class="sheet" id="settingsSheet">
+    <div class="sheet-handle"></div>
+    <h2>設定</h2>
+
+    <div class="field">
+      <label>画面の背景</label>
+      <div class="theme-choices">
+        <button class="theme-btn" data-theme="dark" id="darkBtn">ダーク</button>
+        <button class="theme-btn" data-theme="light" id="lightBtn">ライト</button>
+      </div>
+    </div>
+
+    <button class="sheet-cancel" id="settingsCloseBtn">閉じる</button>
+  </div>
+
+  <div class="sheet" id="txSheet">
+    <div class="sheet-handle"></div>
+    <h2 id="txSheetTitle">利用を追加</h2>
+
+    <div class="field">
+      <label>内容（店名など）</label>
+      <input type="text" id="t_name" placeholder="コンビニ" maxlength="30">
+    </div>
+
+    <div class="row-2">
+      <div class="field">
+        <label>金額</label>
+        <input type="text" id="t_amount" placeholder="1,200" inputmode="decimal">
+      </div>
+      <div class="field">
+        <label>日付</label>
+        <input type="date" id="t_date">
+      </div>
+    </div>
+
+    <button class="sheet-save" id="txSaveBtn">保存</button>
+    <button class="sheet-delete" id="txDeleteBtn" style="display:none;">この利用を削除</button>
+    <button class="sheet-cancel" id="txCancelBtn">キャンセル</button>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+
+  var STORAGE_KEY = "mywallet.cards.v1";
+  var THEME_KEY = "mywallet.theme.v1";
+
+  var GRADIENTS = [
+    "linear-gradient(135deg,#3a3a3c,#0f0f10)",
+    "linear-gradient(135deg,#0a84ff,#004a99)",
+    "linear-gradient(135deg,#ff9f0a,#a35400)",
+    "linear-gradient(135deg,#30d158,#12591f)",
+    "linear-gradient(135deg,#ff375f,#7a0f2b)",
+    "linear-gradient(135deg,#bf5af2,#4b1470)",
+    "linear-gradient(135deg,#64d2ff,#00415c)",
+    "linear-gradient(135deg,#8e8e93,#1c1c1e)"
+  ];
+
+  var cards = [];
+  var expandedId = null;
+  var editingId = null;      // card being edited, null = adding new
+  var selectedDesign = GRADIENTS[0];
+  var selectedPhoto = null;  // data URL if a photo was chosen
+
+  var txCardId = null;       // which card the transaction sheet is for
+  var txEditingId = null;    // transaction being edited, null = adding new
+
+  var stackEl = document.getElementById("stack");
+  var mainEl = document.querySelector("main");
+  var detailEl = document.getElementById("detail");
+  var emptyEl = document.getElementById("emptyState");
+  var sheetEl = document.getElementById("sheet");
+  var settingsSheetEl = document.getElementById("settingsSheet");
+  var txSheetEl = document.getElementById("txSheet");
+  var backdropEl = document.getElementById("backdrop");
+  var swatchesEl = document.getElementById("swatches");
+  var photoInput = document.getElementById("photoInput");
+
+  function loadTheme(){
+    var t = "dark";
+    try{ t = localStorage.getItem(THEME_KEY) || "dark"; }catch(e){}
+    applyTheme(t, false);
+  }
+  function applyTheme(theme, persist){
+    document.body.classList.toggle("light", theme === "light");
+    document.getElementById("darkBtn").classList.toggle("selected", theme === "dark");
+    document.getElementById("lightBtn").classList.toggle("selected", theme === "light");
+    if(persist){
+      try{ localStorage.setItem(THEME_KEY, theme); }catch(e){}
+    }
+  }
+
+  function load(){
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      cards = raw ? JSON.parse(raw) : [];
+    }catch(e){ cards = []; }
+    cards.forEach(function(c){
+      if(!Array.isArray(c.transactions)) c.transactions = [];
+    });
+  }
+  function save(){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(cards)); }
+    catch(e){ /* storage unavailable — app still works this session */ }
+  }
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+  function cardBackgroundStyle(c){
+    if(c.photo){ return 'background-image:url(' + c.photo + ')'; }
+    return 'background-image:' + c.design;
+  }
+
+  function formatDate(d){
+    if(!d) return "";
+    var parts = d.split("-");
+    if(parts.length === 3) return parts[0] + "/" + parts[1] + "/" + parts[2];
+    return d;
+  }
+
+  function computeLayout(n){
+    var maxPeek = 56, minPeek = 22;
+    var maxExpanded = 214, minExpanded = 130;
+    if(n <= 1){ return { peek: maxPeek, expanded: maxExpanded }; }
+
+    var budget = mainEl.clientHeight * 0.8;
+    var peek = (budget - maxExpanded) / (2 * (n - 1));
+    peek = Math.max(minPeek, Math.min(maxPeek, peek));
+
+    var expanded = maxExpanded;
+    var total = 2 * (n - 1) * peek + expanded;
+    if(total > budget){
+      expanded = Math.max(minExpanded, budget - 2 * (n - 1) * peek);
+    }
+    return { peek: peek, expanded: expanded };
+  }
+
+  function render(){
+    stackEl.innerHTML = "";
+    detailEl.innerHTML = "";
+    detailEl.classList.remove("show");
+
+    if(cards.length === 0){
+      emptyEl.style.display = "block";
+      return;
+    }
+    emptyEl.style.display = "none";
+
+    if(expandedId && cards.some(function(c){ return c.id === expandedId; })){
+      var only = cards.find(function(c){ return c.id === expandedId; });
+      stackEl.style.paddingTop = "0px";
+
+      var slot = document.createElement("div");
+      slot.className = "card-slot";
+      slot.style.height = "214px";
+
+      var el = document.createElement("div");
+      el.className = "card expanded";
+      el.style.cssText += cardBackgroundStyle(only);
+      el.style.height = "214px";
+      el.style.top = "0px";
+      el.style.zIndex = 1;
+
+      var labelHtml0 = only.label ? '<div class="label">' + escapeHtml(only.label) + '</div>' : '<div></div>';
+      var numberHtml0 = only.last4 ? '<div class="number">•••• ' + escapeHtml(only.last4) + '</div>' : '<div></div>';
+      var holderHtml0 = only.holder ? '<div class="holder">' + escapeHtml(only.holder) + '</div>' : '';
+      el.innerHTML =
+        '<div class="row-top">' + labelHtml0 + '</div>' +
+        '<div class="row-bottom">' + numberHtml0 + holderHtml0 + '</div>';
+
+      el.addEventListener("click", function(){
+        expandedId = null;
+        render();
+      });
+
+      slot.appendChild(el);
+      stackEl.appendChild(slot);
+    } else {
+
+    var layout = computeLayout(cards.length);
+    var peekH = layout.peek, expH = layout.expanded;
+    stackEl.style.paddingTop = Math.max(0, (cards.length - 1) * peekH) + "px";
+
+    cards.forEach(function(c, i){
+      var slot = document.createElement("div");
+      slot.className = "card-slot";
+      slot.style.height = (i === cards.length - 1 ? expH : peekH) + "px";
+
+      var isExpanded = (c.id === expandedId);
+      var el = document.createElement("div");
+      el.className = "card " + (isExpanded ? "expanded" : "");
+      el.style.cssText += cardBackgroundStyle(c);
+      el.style.height = expH + "px";
+
+      var offset = (cards.length - 1 - i) * peekH;
+      el.style.top = "-" + offset + "px";
+      if(isExpanded){
+        el.style.top = "0px";
+        el.style.zIndex = 99;
+      } else {
+        el.style.zIndex = i;
+      }
+
+      var labelHtml = c.label ? '<div class="label">' + escapeHtml(c.label) + '</div>' : '<div></div>';
+      var rowsHtml = '<div class="row-top">' + labelHtml + '</div>';
+
+      if(isExpanded){
+        var numberHtml = c.last4 ? '<div class="number">•••• ' + escapeHtml(c.last4) + '</div>' : '<div></div>';
+        var holderHtml = c.holder ? '<div class="holder">' + escapeHtml(c.holder) + '</div>' : '';
+        rowsHtml += '<div class="row-bottom">' + numberHtml + holderHtml + '</div>';
+      }
+      el.innerHTML = rowsHtml;
+
+      el.addEventListener("click", function(){
+        expandedId = (expandedId === c.id) ? null : c.id;
+        render();
+        if(expandedId === c.id){
+          setTimeout(function(){
+            detailEl.scrollIntoView({behavior:"smooth", block:"nearest"});
+          }, 80);
+        }
+      });
+
+      slot.appendChild(el);
+      stackEl.appendChild(slot);
+    });
+    }
+
+    var current = cards.find(function(c){ return c.id === expandedId; });
+    if(current){
+      detailEl.classList.add("show");
+
+      var infoRows = "";
+      if(current.holder){
+        infoRows += '<div class="item"><span class="k">名義</span><span class="v">' + escapeHtml(current.holder) + '</span></div>';
+      }
+      if(current.last4){
+        infoRows += '<div class="item"><span class="k">番号</span><span class="v">•••• •••• •••• ' + escapeHtml(current.last4) + '</span></div>';
+      }
+      if(current.expiry){
+        infoRows += '<div class="item"><span class="k">有効期限</span><span class="v">' + escapeHtml(current.expiry) + '</span></div>';
+      }
+
+      var txHtml = "";
+      if(current.transactions.length === 0){
+        txHtml = '<div class="empty-note">利用履歴はまだありません</div>';
+      } else {
+        current.transactions.slice().reverse().forEach(function(t){
+          var amountHtml = t.amount ? '<span class="amount">¥' + escapeHtml(t.amount) + '</span>' : '';
+          var dateHtml = t.date ? '<span class="date">' + escapeHtml(formatDate(t.date)) + '</span>' : '';
+          txHtml += '<div class="item tx-item" data-tx-id="' + t.id + '">' +
+            '<span class="k">' + (t.name ? escapeHtml(t.name) : "（内容なし）") + '</span>' +
+            '<span class="v">' + amountHtml + dateHtml + '</span>' +
+          '</div>';
+        });
+      }
+
+      detailEl.innerHTML =
+        (infoRows ? '<div class="group">' + infoRows + '</div>' : '') +
+        '<div class="section-title">最近のご利用</div>' +
+        '<div class="group">' + txHtml + '</div>' +
+        '<div class="group actions"><button id="addTxBtn">利用を追加</button></div>' +
+        '<div class="group actions">' +
+          '<button id="editCardBtn">カードを編集</button>' +
+          '<button id="removeCardBtn" class="danger">カードを削除</button>' +
+        '</div>';
+
+      document.getElementById("editCardBtn").addEventListener("click", function(){
+        openSheet(current);
+      });
+      document.getElementById("removeCardBtn").addEventListener("click", function(){
+        cards = cards.filter(function(c){ return c.id !== current.id; });
+        expandedId = null;
+        save();
+        render();
+      });
+      document.getElementById("addTxBtn").addEventListener("click", function(){
+        openTxSheet(current.id, null);
+      });
+      Array.prototype.forEach.call(detailEl.querySelectorAll(".tx-item"), function(row){
+        row.addEventListener("click", function(){
+          var tx = current.transactions.find(function(t){ return t.id === row.getAttribute("data-tx-id"); });
+          if(tx) openTxSheet(current.id, tx);
+        });
+      });
+    }
+  }
+
+  function escapeHtml(s){
+    return String(s || "").replace(/[&<>"']/g, function(ch){
+      return ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[ch];
+    });
+  }
+
+  function buildSwatches(){
+    swatchesEl.innerHTML = "";
+    GRADIENTS.forEach(function(g){
+      var s = document.createElement("div");
+      s.className = "swatch";
+      s.style.backgroundImage = g;
+      s.addEventListener("click", function(){
+        selectedDesign = g;
+        selectedPhoto = null;
+        markSelectedSwatch(s);
+      });
+      swatchesEl.appendChild(s);
+    });
+    var photoBtn = document.createElement("div");
+    photoBtn.className = "swatch photo";
+    photoBtn.textContent = "写真";
+    photoBtn.addEventListener("click", function(){ photoInput.click(); });
+    swatchesEl.appendChild(photoBtn);
+  }
+  function markSelectedSwatch(activeEl){
+    Array.prototype.forEach.call(swatchesEl.querySelectorAll(".swatch"), function(s){
+      s.classList.remove("selected");
+    });
+    if(activeEl) activeEl.classList.add("selected");
+  }
+
+  photoInput.addEventListener("change", function(e){
+    var file = e.target.files && e.target.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      selectedPhoto = ev.target.result;
+      selectedDesign = null;
+      markSelectedSwatch(swatchesEl.lastChild);
+    };
+    reader.readAsDataURL(file);
+  });
+
+  function closeAllSheets(){
+    sheetEl.classList.remove("show");
+    settingsSheetEl.classList.remove("show");
+    txSheetEl.classList.remove("show");
+    backdropEl.classList.remove("show");
+  }
+
+  function openSheet(cardToEdit){
+    closeAllSheets();
+    editingId = cardToEdit ? cardToEdit.id : null;
+    document.getElementById("sheetTitle").textContent = cardToEdit ? "カードを編集" : "新しいカード";
+    document.getElementById("f_label").value = cardToEdit ? cardToEdit.label : "";
+    document.getElementById("f_holder").value = cardToEdit ? cardToEdit.holder : "";
+    document.getElementById("f_last4").value = cardToEdit ? cardToEdit.last4 : "";
+    document.getElementById("f_expiry").value = cardToEdit ? cardToEdit.expiry : "";
+    selectedDesign = cardToEdit && !cardToEdit.photo ? cardToEdit.design : GRADIENTS[0];
+    selectedPhoto = cardToEdit && cardToEdit.photo ? cardToEdit.photo : null;
+    markSelectedSwatch(null);
+    if(cardToEdit && !cardToEdit.photo){
+      var idx = GRADIENTS.indexOf(cardToEdit.design);
+      if(idx >= 0) markSelectedSwatch(swatchesEl.children[idx]);
+    } else if(cardToEdit && cardToEdit.photo){
+      markSelectedSwatch(swatchesEl.lastChild);
+    } else {
+      markSelectedSwatch(swatchesEl.children[0]);
+    }
+    sheetEl.classList.add("show");
+    backdropEl.classList.add("show");
+  }
+  function closeSheet(){
+    sheetEl.classList.remove("show");
+    backdropEl.classList.remove("show");
+  }
+
+  function openSettingsSheet(){
+    closeAllSheets();
+    settingsSheetEl.classList.add("show");
+    backdropEl.classList.add("show");
+  }
+  function closeSettingsSheet(){
+    settingsSheetEl.classList.remove("show");
+    backdropEl.classList.remove("show");
+  }
+
+  function openTxSheet(cardId, txToEdit){
+    closeAllSheets();
+    txCardId = cardId;
+    txEditingId = txToEdit ? txToEdit.id : null;
+    document.getElementById("txSheetTitle").textContent = txToEdit ? "利用を編集" : "利用を追加";
+    document.getElementById("t_name").value = txToEdit ? (txToEdit.name || "") : "";
+    document.getElementById("t_amount").value = txToEdit ? (txToEdit.amount || "") : "";
+    document.getElementById("t_date").value = txToEdit ? (txToEdit.date || "") : "";
+    document.getElementById("txDeleteBtn").style.display = txToEdit ? "block" : "none";
+    txSheetEl.classList.add("show");
+    backdropEl.classList.add("show");
+  }
+  function closeTxSheet(){
+    txSheetEl.classList.remove("show");
+    backdropEl.classList.remove("show");
+  }
+
+  document.getElementById("addBtn").addEventListener("click", function(){ openSheet(null); });
+  document.getElementById("emptyAddBtn").addEventListener("click", function(){ openSheet(null); });
+  document.getElementById("cancelBtn").addEventListener("click", closeSheet);
+  document.getElementById("settingsCloseBtn").addEventListener("click", closeSettingsSheet);
+  document.getElementById("txCancelBtn").addEventListener("click", closeTxSheet);
+  backdropEl.addEventListener("click", closeAllSheets);
+
+  document.getElementById("menuBtn").addEventListener("click", openSettingsSheet);
+  document.getElementById("darkBtn").addEventListener("click", function(){ applyTheme("dark", true); });
+  document.getElementById("lightBtn").addEventListener("click", function(){ applyTheme("light", true); });
+
+  document.getElementById("saveBtn").addEventListener("click", function(){
+    var label = document.getElementById("f_label").value.trim();
+    var holder = document.getElementById("f_holder").value.trim().toUpperCase();
+    var last4 = document.getElementById("f_last4").value.trim().replace(/\D/g,"").slice(0,4);
+    var expiry = document.getElementById("f_expiry").value.trim();
+
+    if(editingId){
+      var c = cards.find(function(c){ return c.id === editingId; });
+      c.label = label; c.holder = holder; c.last4 = last4; c.expiry = expiry;
+      c.design = selectedPhoto ? null : selectedDesign;
+      c.photo = selectedPhoto;
+    } else {
+      cards.push({
+        id: uid(),
+        label: label, holder: holder, last4: last4, expiry: expiry,
+        design: selectedPhoto ? null : selectedDesign,
+        photo: selectedPhoto,
+        transactions: []
+      });
+      expandedId = cards[cards.length-1].id;
+    }
+    save();
+    closeSheet();
+    render();
+  });
+
+  document.getElementById("txSaveBtn").addEventListener("click", function(){
+    var name = document.getElementById("t_name").value.trim();
+    var amount = document.getElementById("t_amount").value.trim();
+    var date = document.getElementById("t_date").value;
+    var card = cards.find(function(c){ return c.id === txCardId; });
+    if(!card) return;
+
+    if(txEditingId){
+      var t = card.transactions.find(function(t){ return t.id === txEditingId; });
+      if(t){ t.name = name; t.amount = amount; t.date = date; }
+    } else {
+      card.transactions.push({ id: uid(), name: name, amount: amount, date: date });
+    }
+    save();
+    closeTxSheet();
+    render();
+  });
+
+  document.getElementById("txDeleteBtn").addEventListener("click", function(){
+    var card = cards.find(function(c){ return c.id === txCardId; });
+    if(card){
+      card.transactions = card.transactions.filter(function(t){ return t.id !== txEditingId; });
+      save();
+    }
+    closeTxSheet();
+    render();
+  });
+
+  loadTheme();
+  buildSwatches();
+  load();
+  render();
+})();
+</script>
+</body>
+</html>
